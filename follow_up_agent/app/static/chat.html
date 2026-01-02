@@ -660,7 +660,7 @@ async function sendMessage() {
     sendButton.disabled = true;
 
     try {
-        const response = await fetch("/api/followup/chat", {
+        const response = await fetch("api/followup/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ message, session_id: sessionId })
@@ -688,7 +688,7 @@ function clearConversation() {
 }
 
 function goToVoice() {
-    window.location.href = "/voice";
+    window.location.href = "./voice";
 }
 
 sendButton.onclick = sendMessage;

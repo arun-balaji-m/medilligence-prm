@@ -5,29 +5,29 @@ import asyncio
 
 
 class VoiceService:
-    @staticmethod
-    async def transcribe_with_deepgram(audio_data: bytes) -> Optional[str]:
-        """Send audio to Deepgram and get transcription"""
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "https://api.deepgram.com/v1/listen",
-                    headers={
-                        "Authorization": f"Token {settings.DEEPGRAM_API_KEY}",
-                        "Content-Type": "audio/wav"
-                    },
-                    content=audio_data,
-                    timeout=30.0
-                )
-
-                if response.status_code == 200:
-                    result = response.json()
-                    transcript = result["results"]["channels"][0]["alternatives"][0]["transcript"]
-                    return transcript.strip()
-                return None
-        except Exception as e:
-            print(f"Deepgram error: {e}")
-            return None
+    # @staticmethod
+    # async def transcribe_with_deepgram(audio_data: bytes) -> Optional[str]:
+    #     """Send audio to Deepgram and get transcription"""
+    #     try:
+    #         async with httpx.AsyncClient() as client:
+    #             response = await client.post(
+    #                 "https://api.deepgram.com/v1/listen",
+    #                 headers={
+    #                     "Authorization": f"Token {settings.DEEPGRAM_API_KEY}",
+    #                     "Content-Type": "audio/wav"
+    #                 },
+    #                 content=audio_data,
+    #                 timeout=30.0
+    #             )
+    #
+    #             if response.status_code == 200:
+    #                 result = response.json()
+    #                 transcript = result["results"]["channels"][0]["alternatives"][0]["transcript"]
+    #                 return transcript.strip()
+    #             return None
+    #     except Exception as e:
+    #         print(f"Deepgram error: {e}")
+    #         return None
 
     @staticmethod
     async def speak_with_elevenlabs(text: str) -> Optional[bytes]:

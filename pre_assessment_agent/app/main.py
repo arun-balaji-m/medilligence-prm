@@ -188,20 +188,26 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "message": "Pre-Assessment Agent API",
-        "version": settings.APP_VERSION,
-        "status": "active"
-    }
-
-
-@app.get("/chat")
 async def chat_page():
     """Serve the chat interface"""
     chat_file = STATIC_DIR / "chat.html"
     return FileResponse(chat_file)
+
+
+# async def root():
+#     """Root endpoint"""
+#     return {
+#         "message": "Pre-Assessment Agent API",
+#         "version": settings.APP_VERSION,
+#         "status": "active"
+#     }
+
+
+# @app.get("/chat")
+# async def chat_page():
+#     """Serve the chat interface"""
+#     chat_file = STATIC_DIR / "chat.html"
+#     return FileResponse(chat_file)
 
 
 @app.get("/health")

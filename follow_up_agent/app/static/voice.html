@@ -438,11 +438,110 @@ body {
 
 </div>
 
+<!--<script>-->
+<!--let ws = null;-->
+<!--let mediaRecorder = null;-->
+<!--let audioContext = null;-->
+<!--let isListening = false;-->
+
+<!--const chat = document.getElementById("chat");-->
+<!--const statusEl = document.getElementById("status");-->
+<!--const micIcon = document.getElementById("micIcon");-->
+<!--const micButton = document.getElementById("micButton");-->
+<!--const clearBtn = document.getElementById("clearBtn");-->
+
+<!--function goToChat() {-->
+<!--    window.location.href = "./";-->
+<!--}-->
+
+<!--function addMessage(text, isUser) {-->
+<!--    const msg = document.createElement("div");-->
+<!--    msg.className = "message " + (isUser ? "user" : "assistant");-->
+
+<!--    const bubble = document.createElement("div");-->
+<!--    bubble.className = "bubble";-->
+<!--    bubble.textContent = text;-->
+
+<!--    msg.appendChild(bubble);-->
+<!--    chat.appendChild(msg);-->
+<!--    chat.scrollTop = chat.scrollHeight;-->
+<!--}-->
+
+<!--function updateStatus(text, listening=false) {-->
+<!--    statusEl.textContent = text;-->
+<!--    micIcon.classList.toggle("listening", listening);-->
+<!--}-->
+
+<!--micButton.addEventListener("click", async () => {-->
+<!--    if (!ws) {-->
+<!--        connectWebSocket();-->
+<!--        return;-->
+<!--    }-->
+
+<!--    if (isListening) stopListening();-->
+<!--    else startListening();-->
+<!--});-->
+
+<!--function connectWebSocket() {-->
+<!--    const protocol = location.protocol === "https:" ? "wss:" : "ws:";-->
+<!--&lt;!&ndash;    ws = new WebSocket(`${protocol}//${location.host}/api/followup/ws/voice`);&ndash;&gt;-->
+
+<!--    const pathParts = location.pathname.split('/').filter(p => p);-->
+<!--    const basePath = pathParts.length > 0 ? `/${pathParts[0]}` : '';-->
+
+<!--    ws = new WebSocket(`${protocol}//${location.host}${basePath}/api/followup/ws/voice`);-->
+
+<!--    ws.onopen = () => {-->
+<!--        updateStatus("Listening…", true);-->
+<!--        startListening();-->
+<!--    };-->
+
+<!--    ws.onmessage = async (event) => {-->
+<!--        if (event.data instanceof Blob) {-->
+<!--            playAudio(event.data);-->
+<!--        } else {-->
+<!--            const data = JSON.parse(event.data);-->
+<!--            if (data.type === "transcript") addMessage(data.text, true);-->
+<!--            if (data.type === "response") addMessage(data.text, false);-->
+<!--        }-->
+<!--    };-->
+
+<!--    ws.onclose = () => {-->
+<!--        ws = null;-->
+<!--        updateStatus("Tap to speak");-->
+<!--        isListening = false;-->
+<!--    };-->
+<!--}-->
+
+<!--async function startListening() {-->
+<!--    isListening = true;-->
+<!--    updateStatus("Listening…", true);-->
+<!--}-->
+
+<!--function stopListening() {-->
+<!--    isListening = false;-->
+<!--    updateStatus("Tap to speak");-->
+<!--}-->
+
+<!--function playAudio(blob) {-->
+<!--    const url = URL.createObjectURL(blob);-->
+<!--    const audio = new Audio(url);-->
+<!--    audio.onended = () => URL.revokeObjectURL(url);-->
+<!--    audio.play();-->
+<!--}-->
+
+<!--clearBtn.onclick = () => {-->
+<!--    chat.innerHTML = "";-->
+<!--    updateStatus("Tap to speak");-->
+<!--};-->
+<!--</script>-->
+
 <script>
 let ws = null;
-let mediaRecorder = null;
 let audioContext = null;
 let isListening = false;
+let audioQueue = [];
+let isPlayingAudio = false;
 
 const chat = document.getElementById("chat");
 const statusEl = document.getElementById("status");
@@ -451,7 +550,7 @@ const micButton = document.getElementById("micButton");
 const clearBtn = document.getElementById("clearBtn");
 
 function goToChat() {
-    window.location.href = "/";
+    window.location.href = "./";
 }
 
 function addMessage(text, isUser) {
@@ -467,68 +566,142 @@ function addMessage(text, isUser) {
     chat.scrollTop = chat.scrollHeight;
 }
 
-function updateStatus(text, listening=false) {
+function updateStatus(text, listening = false) {
     statusEl.textContent = text;
     micIcon.classList.toggle("listening", listening);
+
+    if (text === "Listening...") {
+        micButton.classList.remove("disabled");
+    } else {
+        micButton.classList.add("disabled");
+    }
 }
 
-micButton.addEventListener("click", async () => {
-    if (!ws) {
-        connectWebSocket();
-        return;
-    }
+/* ---------- AUDIO (PCM) ---------- */
 
-    if (isListening) stopListening();
-    else startListening();
-});
+async function initAudio() {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)({
+        sampleRate: 16000
+    });
 
-function connectWebSocket() {
-    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    ws = new WebSocket(`${protocol}//${location.host}/api/followup/ws/voice`);
+    await audioContext.resume();
 
-    ws.onopen = () => {
-        updateStatus("Listening…", true);
-        startListening();
-    };
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioContext.createMediaStreamSource(stream);
 
-    ws.onmessage = async (event) => {
-        if (event.data instanceof Blob) {
-            playAudio(event.data);
-        } else {
-            const data = JSON.parse(event.data);
-            if (data.type === "transcript") addMessage(data.text, true);
-            if (data.type === "response") addMessage(data.text, false);
+    await audioContext.audioWorklet.addModule("static/pcm-processor.js");
+
+    const worklet = new AudioWorkletNode(audioContext, "pcm-processor");
+
+    worklet.port.onmessage = (event) => {
+        if (ws?.readyState === WebSocket.OPEN) {
+            ws.send(event.data); // raw PCM
         }
     };
 
-    ws.onclose = () => {
-        ws = null;
-        updateStatus("Tap to speak");
-        isListening = false;
-    };
+    source.connect(worklet);
+    worklet.connect(audioContext.destination);
 }
 
-async function startListening() {
+/* ---------- MIC ---------- */
+
+micButton.addEventListener("click", async () => {
+    if (micButton.classList.contains("disabled")) return;
+
+    if (!ws) {
+        updateStatus("Connecting...");
+        await connectWebSocket();
+        return;
+    }
+
+    isListening ? stopListening() : startListening();
+});
+
+function startListening() {
     isListening = true;
     updateStatus("Listening…", true);
 }
 
 function stopListening() {
     isListening = false;
-    updateStatus("Tap to speak");
+    updateStatus("Processing...");
 }
 
-function playAudio(blob) {
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    audio.onended = () => URL.revokeObjectURL(url);
-    audio.play();
+/* ---------- WEBSOCKET ---------- */
+
+async function connectWebSocket() {
+    await initAudio();
+
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+<!--    ws = new WebSocket(`${protocol}//${location.host}/api/followup/ws/voice`);-->
+
+    const pathParts = location.pathname.split('/').filter(p => p);
+    const basePath = pathParts.length > 0 ? `/${pathParts[0]}` : '';
+
+    ws = new WebSocket(`${protocol}//${location.host}${basePath}/api/followup/ws/voice`);
+
+    ws.onopen = () => {
+        updateStatus("Connected");
+    };
+
+    ws.onmessage = async (event) => {
+        if (event.data instanceof Blob) {
+            audioQueue.push(event.data);
+            if (!isPlayingAudio) playNextAudio();
+            return;
+        }
+
+        const data = JSON.parse(event.data);
+
+        if (data.type === "status") {
+            updateStatus(data.message, data.message === "Listening...");
+        }
+        else if (data.type === "interim_transcript") {
+            updateStatus("Hearing: " + data.text.slice(0, 30) + "…", true);
+        }
+        else if (data.type === "transcript") {
+            addMessage(data.text, true);
+        }
+        else if (data.type === "response") {
+            addMessage(data.text, false);
+        }
+    };
+
+    ws.onclose = () => {
+        ws = null;
+        updateStatus("Tap to speak");
+    };
 }
+
+/* ---------- AUDIO PLAYBACK ---------- */
+
+async function playNextAudio() {
+    if (!audioQueue.length) {
+        isPlayingAudio = false;
+        return;
+    }
+
+    isPlayingAudio = true;
+    const blob = audioQueue.shift();
+
+    const buffer = await audioContext.decodeAudioData(await blob.arrayBuffer());
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContext.destination);
+    source.onended = playNextAudio;
+    source.start();
+}
+
+/* ---------- CLEAR ---------- */
 
 clearBtn.onclick = () => {
     chat.innerHTML = "";
     updateStatus("Tap to speak");
 };
+
+window.addEventListener("beforeunload", () => {
+    ws?.close();
+});
 </script>
 
 </body>

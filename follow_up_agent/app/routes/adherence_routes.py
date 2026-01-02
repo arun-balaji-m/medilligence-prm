@@ -1591,7 +1591,16 @@ async def voice_websocket(websocket: WebSocket, db: Session = Depends(get_db)):
             await websocket.send_json({"type": "audio_complete"})
 
         # Connect to Deepgram
-        deepgram_url = "wss://api.deepgram.com/v1/listen?model=nova-2&interim_results=true&punctuate=true&vad_events=true"
+        deepgram_url = (
+            "wss://api.deepgram.com/v1/listen?"
+            "model=nova-2"
+            "&encoding=linear16"
+            "&sample_rate=16000"
+            "&channels=1"
+            "&interim_results=true"
+            "&vad_events=true"
+        )
+
         deepgram_ws = await websockets.connect(
             deepgram_url,
             additional_headers={"Authorization": f"Token {settings.DEEPGRAM_API_KEY}"}

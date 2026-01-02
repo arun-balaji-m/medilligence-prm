@@ -1182,7 +1182,7 @@ async function sendMessage() {
     sendButton.disabled = true;
 
     try {
-        const res = await fetch("/api/chat/message", {
+        const res = await fetch("api/chat/message", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ message: text, session_id: sessionId })
@@ -1210,7 +1210,7 @@ function clearConversation() {
 }
 
 function goToVoice() {
-    window.location.href = "/voice";
+    window.location.href = "./voice";
 }
 
 sendButton.onclick = sendMessage;
