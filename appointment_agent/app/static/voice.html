@@ -190,6 +190,12 @@ body {
 </div>
 
 <script>
+
+const DEBUG = true;
+function log(...args) {
+    if (DEBUG) console.log("[VOICE]", ...args);
+}
+
 function goToText() {
     window.location.href = "./";
 }
@@ -206,6 +212,14 @@ let mediaRecorder = null;
 let audioContext = null;
 let audioQueue = [];
 let isPlayingAudio = false;
+
+document.body.addEventListener("click", async () => {
+    if (audioContext && audioContext.state !== "running") {
+        await audioContext.resume();
+        log("AudioContext resumed by user gesture");
+    }
+}, { once: true });
+
 
 
 
@@ -235,33 +249,77 @@ function updateStatus(text, listening = false) {
 }
 
 
+<!--async function initAudio() {-->
+<!--    try {-->
+<!--        audioContext = new (window.AudioContext || window.webkitAudioContext)({-->
+<!--            sampleRate: 16000   // IMPORTANT-->
+<!--        });-->
+
+<!--        await audioContext.resume();-->
+
+<!--        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });-->
+<!--        const source = audioContext.createMediaStreamSource(stream);-->
+
+<!--        await audioContext.audioWorklet.addModule("static/pcm-processor.js");-->
+
+<!--        const worklet = new AudioWorkletNode(audioContext, "pcm-processor");-->
+
+<!--        worklet.port.onmessage = (event) => {-->
+<!--            if (websocket?.readyState === WebSocket.OPEN) {-->
+<!--                websocket.send(event.data); // raw PCM bytes-->
+<!--            }-->
+<!--        };-->
+
+<!--        source.connect(worklet);-->
+<!--        worklet.connect(audioContext.destination); // optional (monitor)-->
+
+<!--        return true;-->
+<!--    } catch (err) {-->
+<!--        console.error("Audio init failed:", err);-->
+<!--        updateStatus("Microphone error");-->
+<!--        return false;-->
+<!--    }-->
+<!--}-->
+
+
 async function initAudio() {
     try {
+        log("Initializing AudioContext…");
+
         audioContext = new (window.AudioContext || window.webkitAudioContext)({
-            sampleRate: 16000   // IMPORTANT
+            sampleRate: 16000
         });
 
+        log("AudioContext state:", audioContext.state);
+
         await audioContext.resume();
+        log("AudioContext resumed");
 
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        log("Microphone permission granted");
+
         const source = audioContext.createMediaStreamSource(stream);
 
         await audioContext.audioWorklet.addModule("static/pcm-processor.js");
+        log("AudioWorklet loaded");
 
         const worklet = new AudioWorkletNode(audioContext, "pcm-processor");
 
         worklet.port.onmessage = (event) => {
             if (websocket?.readyState === WebSocket.OPEN) {
-                websocket.send(event.data); // raw PCM bytes
+                log("Sending audio chunk → backend", event.data.byteLength);
+                websocket.send(event.data);
+            } else {
+                log("WS not open, dropping audio chunk");
             }
         };
 
         source.connect(worklet);
-        worklet.connect(audioContext.destination); // optional (monitor)
+        worklet.connect(audioContext.destination);
 
         return true;
     } catch (err) {
-        console.error("Audio init failed:", err);
+        console.error("❌ Audio init failed:", err);
         updateStatus("Microphone error");
         return false;
     }
@@ -291,6 +349,52 @@ function stopListening() {
 }
 
 
+<!--async function connectWebSocket() {-->
+<!--    if (!(await initAudio())) return;-->
+
+<!--    const protocol = location.protocol === "https:" ? "wss:" : "ws:";-->
+<!--    const pathParts = location.pathname.split("/").filter(Boolean);-->
+<!--    const basePath = pathParts.length ? `/${pathParts[0]}` : "";-->
+
+<!--    websocket = new WebSocket(`${protocol}//${location.host}${basePath}/api/voice/ws`);-->
+
+<!--&lt;!&ndash;    websocket = new WebSocket(`${protocol}//${location.host}/api/voice/ws`);&ndash;&gt;-->
+
+<!--    websocket.onopen = () => updateStatus("Connected");-->
+
+<!--    websocket.onmessage = async (e) => {-->
+<!--        if (e.data instanceof Blob) {-->
+<!--            audioQueue.push(e.data);-->
+<!--            if (!isPlayingAudio) playNextAudio();-->
+<!--            return;-->
+<!--        }-->
+
+<!--        const data = JSON.parse(e.data);-->
+
+<!--        if (data.type === "status") {-->
+<!--            updateStatus(data.message, data.message === "Listening...");-->
+<!--        }-->
+<!--        else if (data.type === "interim_transcript") {-->
+<!--            updateStatus("Hearing: " + data.text.substring(0, 30) + "…", true);-->
+<!--        }-->
+<!--        else if (data.type === "transcript") {-->
+<!--            addMessage(data.text, true);-->
+<!--        }-->
+<!--        else if (data.type === "response") {-->
+<!--            addMessage(data.text, false);-->
+<!--        }-->
+<!--        else if (data.type === "error") {-->
+<!--            updateStatus("Error: " + data.message);-->
+<!--        }-->
+<!--    };-->
+
+<!--    websocket.onerror = () => updateStatus("Connection error");-->
+<!--    websocket.onclose = () => {-->
+<!--        websocket = null;-->
+<!--        updateStatus("Tap to speak");-->
+<!--    };-->
+<!--}-->
+
 async function connectWebSocket() {
     if (!(await initAudio())) return;
 
@@ -298,67 +402,117 @@ async function connectWebSocket() {
     const pathParts = location.pathname.split("/").filter(Boolean);
     const basePath = pathParts.length ? `/${pathParts[0]}` : "";
 
-    websocket = new WebSocket(`${protocol}//${location.host}${basePath}/api/voice/ws`);
+    const wsUrl = `${protocol}//${location.host}${basePath}/api/voice/ws`;
+    log("Connecting WebSocket →", wsUrl);
 
-<!--    websocket = new WebSocket(`${protocol}//${location.host}/api/voice/ws`);-->
+    websocket = new WebSocket(wsUrl);
 
-    websocket.onopen = () => updateStatus("Connected");
+    websocket.onopen = () => {
+        log("WebSocket OPEN");
+        updateStatus("Connected");
+    };
+
+    websocket.onerror = (e) => {
+        console.error("❌ WebSocket error", e);
+        updateStatus("Connection error");
+    };
+
+    websocket.onclose = (e) => {
+        log("WebSocket CLOSED", e.code, e.reason);
+        websocket = null;
+        updateStatus("Tap to speak");
+    };
 
     websocket.onmessage = async (e) => {
+        log("WS message received", e.data);
+
         if (e.data instanceof Blob) {
+            log("Received audio blob", e.data.size);
             audioQueue.push(e.data);
             if (!isPlayingAudio) playNextAudio();
             return;
         }
 
-        const data = JSON.parse(e.data);
+        try {
+            const data = JSON.parse(e.data);
+            log("Parsed WS JSON:", data);
 
-        if (data.type === "status") {
-            updateStatus(data.message, data.message === "Listening...");
+            if (data.type === "status") {
+                updateStatus(data.message, data.message === "Listening...");
+            } else if (data.type === "interim_transcript") {
+                updateStatus("Hearing: " + data.text.substring(0, 30) + "…", true);
+            } else if (data.type === "transcript") {
+                addMessage(data.text, true);
+            } else if (data.type === "response") {
+                addMessage(data.text, false);
+            } else if (data.type === "error") {
+                updateStatus("Error: " + data.message);
+            }
+        } catch (err) {
+            console.error("❌ Failed to parse WS message", err);
         }
-        else if (data.type === "interim_transcript") {
-            updateStatus("Hearing: " + data.text.substring(0, 30) + "…", true);
-        }
-        else if (data.type === "transcript") {
-            addMessage(data.text, true);
-        }
-        else if (data.type === "response") {
-            addMessage(data.text, false);
-        }
-        else if (data.type === "error") {
-            updateStatus("Error: " + data.message);
-        }
-    };
-
-    websocket.onerror = () => updateStatus("Connection error");
-    websocket.onclose = () => {
-        websocket = null;
-        updateStatus("Tap to speak");
     };
 }
 
 
+<!--async function playNextAudio() {-->
+<!--    if (!audioQueue.length) {-->
+<!--        isPlayingAudio = false;-->
+<!--        return; // 🔒 backend controls status-->
+<!--    }-->
+
+<!--    isPlayingAudio = true;-->
+
+<!--    try {-->
+<!--        const audioBlob = audioQueue.shift();-->
+<!--        const buffer = await audioContext.decodeAudioData(await audioBlob.arrayBuffer());-->
+
+<!--        const source = audioContext.createBufferSource();-->
+<!--        source.buffer = buffer;-->
+<!--        source.connect(audioContext.destination);-->
+<!--        source.onended = playNextAudio;-->
+<!--        source.start(0);-->
+<!--    } catch {-->
+<!--        playNextAudio();-->
+<!--    }-->
+<!--}-->
+
 async function playNextAudio() {
     if (!audioQueue.length) {
+        log("Audio queue empty");
         isPlayingAudio = false;
-        return; // 🔒 backend controls status
+        return;
     }
 
     isPlayingAudio = true;
 
     try {
         const audioBlob = audioQueue.shift();
-        const buffer = await audioContext.decodeAudioData(await audioBlob.arrayBuffer());
+        log("Decoding audio blob", audioBlob.size);
+
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const buffer = await audioContext.decodeAudioData(arrayBuffer);
+
+        log("Audio decoded, duration:", buffer.duration);
 
         const source = audioContext.createBufferSource();
         source.buffer = buffer;
         source.connect(audioContext.destination);
-        source.onended = playNextAudio;
+
+        source.onended = () => {
+            log("Audio playback ended");
+            playNextAudio();
+        };
+
         source.start(0);
-    } catch {
+        log("Audio playback started");
+
+    } catch (err) {
+        console.error("❌ Audio playback failed", err);
         playNextAudio();
     }
 }
+
 
 
 clearBtn.onclick = () => {
