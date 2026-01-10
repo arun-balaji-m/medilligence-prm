@@ -359,6 +359,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         audio = await voice_handler.text_to_speech(WELCOME_MESSAGE)
         if audio:
+            print("✅ Sending audio bytes:", len(audio))
             await websocket.send_bytes(audio)
             await websocket.send_json({"type": "audio_complete"})
 
