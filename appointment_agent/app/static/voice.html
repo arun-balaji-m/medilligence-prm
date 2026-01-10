@@ -212,6 +212,8 @@ let mediaRecorder = null;
 let audioContext = null;
 let audioQueue = [];
 let isPlayingAudio = false;
+let pendingAudio = [];
+
 
 document.body.addEventListener("click", async () => {
     if (audioContext && audioContext.state !== "running") {
@@ -305,14 +307,23 @@ async function initAudio() {
 
         const worklet = new AudioWorkletNode(audioContext, "pcm-processor");
 
+<!--        worklet.port.onmessage = (event) => {-->
+<!--            if (websocket?.readyState === WebSocket.OPEN) {-->
+<!--                log("Sending audio chunk → backend", event.data.byteLength);-->
+<!--                websocket.send(event.data);-->
+<!--            } else {-->
+<!--                log("WS not open, dropping audio chunk");-->
+<!--            }-->
+<!--        };-->
+
         worklet.port.onmessage = (event) => {
             if (websocket?.readyState === WebSocket.OPEN) {
-                log("Sending audio chunk → backend", event.data.byteLength);
                 websocket.send(event.data);
             } else {
-                log("WS not open, dropping audio chunk");
+                pendingAudio.push(event.data);
             }
         };
+
 
         source.connect(worklet);
         worklet.connect(audioContext.destination);
@@ -407,10 +418,23 @@ async function connectWebSocket() {
 
     websocket = new WebSocket(wsUrl);
 
+<!--    websocket.onopen = () => {-->
+<!--        log("WebSocket OPEN");-->
+<!--        updateStatus("Connected");-->
+<!--    };-->
+
     websocket.onopen = () => {
         log("WebSocket OPEN");
+
+        // flush buffered mic audio
+        for (const chunk of pendingAudio) {
+            websocket.send(chunk);
+        }
+        pendingAudio = [];
+
         updateStatus("Connected");
     };
+
 
     websocket.onerror = (e) => {
         console.error("❌ WebSocket error", e);
