@@ -305,19 +305,19 @@ async def list_agents():
     }
 
 
-if __name__ == "__main__":
-    import uvicorn
-
-    print("=" * 70)
-    print("Starting MediLligence AI Agents Gateway")
-    print("=" * 70)
-    print("\nGateway URL: http://localhost:8000")
-    print("\nAgent Routes:")
-    print("  • Appointment Agent: http://localhost:8000/appointment")
-    print("  • Follow-up Agent:   http://localhost:8000/followup")
-    print("  • FAQ Agent:         http://localhost:8000/faq")
-    print("  • Referral Agent:    http://localhost:8000/referral")
-    print("  • Assessment Agent:  http://localhost:8000/assessment")
-    print("\n" + "=" * 70 + "\n")
-
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+# if __name__ == "__main__":
+#     import uvicorn
+#
+#     print("=" * 70)
+#     print("Starting MediLligence AI Agents Gateway")
+#     print("=" * 70)
+#     print("\nGateway URL: http://localhost:8000")
+#     print("\nAgent Routes:")
+#     print("  • Appointment Agent: http://localhost:8000/appointment")
+#     print("  • Follow-up Agent:   http://localhost:8000/followup")
+#     print("  • FAQ Agent:         http://localhost:8000/faq")
+#     print("  • Referral Agent:    http://localhost:8000/referral")
+#     print("  • Assessment Agent:  http://localhost:8000/assessment")
+#     print("\n" + "=" * 70 + "\n")
+#
+#     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
