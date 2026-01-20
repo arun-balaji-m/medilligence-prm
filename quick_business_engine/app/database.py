@@ -3,9 +3,13 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 import chromadb
+from chromadb.config import Settings as ChromaSettings
 from sentence_transformers import SentenceTransformer
 from quick_business_engine.app.config import get_settings
 import os
+
+# Disable ChromaDB telemetry completely
+os.environ['ANONYMIZED_TELEMETRY'] = 'False'
 
 settings = get_settings()
 
@@ -32,9 +36,13 @@ def get_db():
 # Ensure ChromaDB directory exists
 os.makedirs(settings.CHROMA_PERSIST_DIRECTORY, exist_ok=True)
 
-# ChromaDB Client (Persistent)
+# ChromaDB Client (Persistent) - Disable telemetry
 chroma_client = chromadb.PersistentClient(
-    path=settings.CHROMA_PERSIST_DIRECTORY
+    path=settings.CHROMA_PERSIST_DIRECTORY,
+    settings=ChromaSettings(
+        anonymized_telemetry=False,
+        allow_reset=True
+    )
 )
 
 # Get or create collection

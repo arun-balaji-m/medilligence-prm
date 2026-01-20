@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
@@ -10,7 +10,7 @@ class TableSchema(BaseModel):
     columns: List[Dict[str, str]]  # [{name, type, description}]
     jsonb_columns: Optional[List[Dict[str, Any]]] = None  # [{column_name, structure}]
     indexed_columns: List[str] = []
-    # example_queries: List[str] = []
+    example_queries: List[str] = []
     database_name: str = "main"
     row_count_estimate: Optional[int] = None
 
@@ -34,6 +34,8 @@ class QueryResponse(BaseModel):
 
 class TableSearchResult(BaseModel):
     """Result from semantic search"""
+    model_config = ConfigDict(protected_namespaces=())
+
     table_name: str
     relevance_score: float
     schema: str

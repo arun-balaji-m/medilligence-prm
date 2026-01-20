@@ -319,33 +319,28 @@ class AIService:
         """
         Tier 1b: Use Llama via Groq to evaluate and rank tables
         """
-        prompt = f"""
-        You are an expert database table selector.
+        prompt = f"""You are a database expert. Analyze the user's query and select the most relevant tables.
 
-        User query:
-        {query}
+        USER QUERY: {query}
 
-        Available tables (use ONLY these):
-        {chr(10).join([f"- {schema[:350]}" for schema in all_schemas])}
+        AVAILABLE TABLES:
+        {chr(10).join([f"{i + 1}. {schema[:500]}..." for i, schema in enumerate(all_schemas)])}
 
-        Task:
-        Select the 3–5 most relevant tables for answering the query.
+        TASK: Select the top 3-5 most relevant tables for this query. Consider:
+        - Table description relevance
+        - Column matches
+        - JSONB structure relevance
+        - Indexed columns for performance
 
-        Selection criteria:
-        - Column and field relevance (including JSONB)
-        - Semantic match to the query
-        - Likely join usefulness
-
-        Output:
-        Return JSON only in this format:
+        OUTPUT FORMAT (JSON only):
         {{
-          "selected_tables": [
-            {{
-              "table_name": "table_name",
-              "relevance_score": 0.0,
-              "reason": "short explanation"
-            }}
-          ]
+            "selected_tables": [
+                {{
+                    "table_name": "table_name",
+                    "relevance_score": 0.95,
+                    "reasoning": "why this table is relevant"
+                }}
+            ]
         }}
         """
 
@@ -442,33 +437,33 @@ class AIService:
             for t in top_tables
         ])
 
-        prompt = f"""
-        You are an expert PostgreSQL query generator.
+        prompt = f"""You are a PostgreSQL expert. Generate a SELECT query based on the user's request.
 
-        User request:
-        {user_query}
+        USER REQUEST: {user_query}
 
-        Use ONLY the tables and columns defined below:
+        AVAILABLE TABLES (use ONLY these):
         {schemas_text}
 
-        Rules:
-        - Generate a SINGLE SELECT statement only
-        - Do NOT use SELECT *
-        - Do NOT use CREATE, INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE
-        - Do NOT include LIMIT or a trailing semicolon
-        - Use valid PostgreSQL syntax
+        CRITICAL REQUIREMENTS:
+        1. Generate ONLY SELECT queries (no INSERT, UPDATE, DELETE, DROP, etc.)
+        2. Use proper PostgreSQL syntax
+        3. For JSONB columns - ALWAYS expand them into separate columns:
+           - WRONG: SELECT * FROM table
+           - RIGHT: SELECT id, data->>'field1' as field1, data->>'field2' as field2, data->'nested'->>'field3' as field3 FROM table
+           - Extract ALL relevant JSONB fields as separate columns with meaningful aliases
+           - Use ->> for text values, -> for nested objects
+        4. NEVER use SELECT * - always specify columns explicitly
+        5. For nested JSONB: data->'parent'->'child'->>'field' as descriptive_name
+        6. Utilize indexed columns in WHERE clauses when possible
+        7. Use proper JOIN syntax if multiple tables needed
+        8. Do NOT include LIMIT clause (handled automatically)
 
-        JSONB rules:
-        - Always extract JSONB fields into explicit columns
-        - Use ->> for text values, -> for objects
-        - For nested fields: parent->child->>'field' AS descriptive_name
+        EXAMPLE:
+        User: "Show patients born after 1990"
+        BAD: SELECT * FROM patient WHERE (data->>'birthDate')::date > '1990-12-31'
+        GOOD: SELECT id, data->>'mrn' as mrn, data->>'fullName' as full_name, data->>'birthDate' as birth_date, data->>'gender' as gender, data->'address'->>'city' as city FROM patient WHERE (data->>'birthDate')::date > '1990-12-31'
 
-        Query rules:
-        - Use indexed columns in WHERE when available
-        - Use explicit JOIN syntax if multiple tables are needed
-
-        Output:
-        Return ONLY the SQL query. No markdown, no explanations.
+        OUTPUT: Return ONLY the SQL query, nothing else. No markdown, no explanations.
         """
 
         try:

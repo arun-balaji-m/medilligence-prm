@@ -5,7 +5,6 @@ Add your table schemas here - they will be loaded automatically when the service
 
 from quick_business_engine.app.database import registry_collection, embedding_model
 from typing import Dict, List
-import asyncio
 
 # ==========================================
 # DEFINE YOUR TABLE SCHEMAS HERE
@@ -417,7 +416,6 @@ TABLE_SCHEMAS = [
 # ==========================================
 # REGISTRY INITIALIZATION LOGIC
 # ==========================================
-
 def _create_document_from_schema(table_schema: Dict) -> str:
     """Create a text document from table schema for embeddings"""
 
@@ -461,7 +459,7 @@ Indexed Columns: {', '.join(table_schema.get('indexed_columns', []))}
     return document
 
 
-async def initialize_registry() -> bool:
+def initialize_registry() -> bool:
     """
     Initialize ChromaDB registry with table schemas on startup
     Returns True if registry was created, False if it already exists
