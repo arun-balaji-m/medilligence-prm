@@ -8,8 +8,6 @@ chromadb==0.4.22
 ConfigParser==7.2.0
 contextlib2==21.6.0
 curio==1.6
-cx_Oracle==8.3.0
-Cython==3.2.4
 dl==0.1.0
 docutils==0.22.4
 elevenlabs==2.31.0
@@ -29,7 +27,6 @@ ipython==8.12.3
 ipywidgets==8.1.8
 itsdangerous==2.2.0
 Jinja2==3.1.6
-jnius==1.1.0
 js==1.0
 keyring==25.7.0
 matplotlib==3.10.8
